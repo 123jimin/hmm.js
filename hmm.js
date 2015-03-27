@@ -1,14 +1,16 @@
 var HMM = (function(){
+var ARR = (typeof Float64Array) == 'function' ? Float64Array : Array;
+
 var HMM = function(n, o){
 	this.N = n; this.O = o;
 	this.states = new Array(n);
-	this.init_prob = new Array(n);
+	this.init_prob = new ARR(n);
 
 	var obj, i, j;
 	for(i=0; i<n; i++){
 		obj = {
-			'next': new Array(n),
-			'prob': new Array(o)
+			'next': new ARR(n),
+			'prob': new ARR(o)
 		};
 		for(j=0; j<n; j++) obj.next[j] = 1/n;
 		for(j=0; j<o; j++) obj.prob[j] = 1/o;
@@ -38,7 +40,7 @@ HMM.prototype.evaluate = function HMM$evaluate(outputs){
 		states = this.states;
 	
 	var prev_alpha = null,
-		next_alpha = this.init_prob.map(function(v, i){return v*states[i].prob[outputs[0]];});
+		next_alpha = Array.prototype.map.call(this.init_prob, function(v, i){return v*states[i].prob[outputs[0]];});
 	
 	var t, sum, output;
 	for(t=1; t<outputs.length; t++){
@@ -136,14 +138,14 @@ HMM.prototype.toString = function HMM$toString(){
 		this.states.map(function(o){
 			return [
 				'[[',
-				o.next.join(','),
+				Array.prototype.join.call(o.next),
 				'],[',
-				o.prob.join(','),
+				Array.prototype.join.call(o.prob),
 				']]'
 			].join('');
 		}).join(','),
 		'],[',
-		this.init_prob.join(','),
+		Array.prototype.join.call(this.init_prob),
 		']]'
 	].join('');
 };
@@ -153,10 +155,10 @@ HMM.parse = function HMM_parse(str){
 	var hmm = new HMM(json[0], json[1]);
 	hmm.states = json[2].map(function(o){
 		return {
-			'next': o[0], 'prob': o[1]
+			'next': ARR.call(null, o[0]), 'prob': ARR.call(null, o[1])
 		};
 	});
-	hmm.init_prob = json[3];
+	hmm.init_prob = ARR.call(null, json[3]);
 
 	return hmm;
 };
