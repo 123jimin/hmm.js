@@ -32,22 +32,24 @@ HMM.prototype.randomize = function HMM$randomize(){
 };
 
 HMM.prototype.evaluate = function HMM$evaluate(outputs){
-	var alpha = [], i, j, k, sum, output;
+	if(outputs.length == 0) return 1;
 	
-	for(i=0; i<outputs.length; i++){
-		alpha[i] = [];
-		output = outputs[i];
-		for(j=0; j<this.N; j++){
-			if(i==0){
-				alpha[0][j] = this.init_prob[j] * this.states[j].prob[output];
-			}else{
-				for(k=sum=0; k<this.N; k++) sum += alpha[i-1][k]*this.states[k].next[j];
-				alpha[i][j] = sum*this.states[j].prob[output];
-			}
-		}
+	var N = this.N,
+		states = this.states;
+	
+	var prev_alpha = null,
+		next_alpha = this.init_prob.map(function(v, i){return v*states[i].prob[outputs[0]];});
+	
+	var t, sum, output;
+	for(t=1; t<outputs.length; t++){
+		output = outputs[t];
+		prev_alpha = next_alpha;
+		next_alpha = states.map(function(state, j){
+			for(var v=0, i=0; i<N; i++) v += prev_alpha[i] * states[i].next[j];
+			return v * state.prob[output];
+		});
 	}
-
-	for(sum=i=0; i<this.N; i++) sum += alpha[outputs.length-1][i];
+	for(sum=t=0; t<N; t++) sum += next_alpha[t];
 	return sum;
 };
 
