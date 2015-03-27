@@ -1,0 +1,22 @@
+{
+	"name": "hmm.js",
+	"version": "0.0.0",
+	"description": "An implementation of HMM in JavaScript",
+	"keywords": [
+		"hmm", "hidden markov model", "markov model"
+	],
+	"main": "./hmm.js",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/123jimin/hmm.js.git"
+	},
+	"license": "MIT",
+	"readme": "README.md",
+	"private": true,
+	"scripts": {
+		"test": "./node_modules/mocha/bin/mocha -R spec"
+	},
+	"devDependencies": {
+		"mocha": "^2.2.1"
+	}
+}
