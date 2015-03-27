@@ -19,10 +19,10 @@ var HMM = function(n, o){
 };
 
 HMM.prototype.randomize = function HMM$randomize(){
-	var i, j, k, x;
-	for(k=0; k<3*n; k++){
-		i = 0|Math.random()*n;
-		j = 0|Math.random()*n;
+	var i, j, k, x, N = this.N;
+	for(k=0; k<3*N; k++){
+		i = 0|Math.random()*N;
+		j = 0|Math.random()*N;
 		if(i==j) continue;
 		if(this.init_prob[i] + this.init_prob[j] >= 1) continue;
 		x = Math.random()*this.init_prob[i];
@@ -58,23 +58,20 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 	
 	var alpha=[], beta=[];
 	var gamma=[], kappa=[];
-	var input=[];
 	var i,j,k,l,sum;
-	var outputs = this.outputs, states = this.states, init = this.init_prob;
+	var states = this.states, init = this.init_prob;
 	var N = this.N, O = this.O, S = outputs.length;
 	
-	// Expectation - step 1
+	// Expectation - step 1 (computing alpha and beta)
 	for(i=0;i<outputs.length;i++){
 		alpha[i] = []; beta[i] = [];
 		gamma[i] = []; if(i<S-1) kappa[i] = [];
-		input.push(outputs[i]);
-		if(input[i] == -1) throw new Error('Invalid character: '+s[i]);
 		for(j=0;j<N;j++){
 			if(i==0){
-				alpha[0][j] = init[j]*states[j].prob[input[0]];
+				alpha[0][j] = init[j]*states[j].prob[outputs[0]];
 			}else{
 				for(k=sum=0;k<N;k++) sum += alpha[i-1][k]*states[k].next[j];
-				alpha[i][j] = sum*states[j].prob[input[i]];
+				alpha[i][j] = sum*states[j].prob[outputs[i]];
 			}
 		}
 	}
@@ -85,11 +82,11 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 			}else{
 				beta[i][j] = 0;
 				for(k=0;k<N;k++)
-					beta[i][j] += states[j].next[k]*states[k].prob[input[i+1]]*beta[i+1][k];
+					beta[i][j] += states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k];
 			}
 		}
 	}
-	// Expectation - step 2
+	// Expectation - step 2 (computing gamma and kappa)
 	for(i=0;i<S;i++){
 		for(k=sum=0;k<N;k++) sum += alpha[i][k]*beta[i][k];
 		for(j=0;j<N;j++){
@@ -97,10 +94,10 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 		}
 		if(i==S-1) break;
 		for(j=sum=0;j<N;j++) for(k=0;k<N;k++){
-			sum += alpha[i][j]*states[j].next[k]*states[k].prob[input[i+1]]*beta[i+1][k];
+			sum += alpha[i][j]*states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k];
 		}
 		for(j=0;j<N;j++) for(kappa[i][j]=[],k=0;k<N;k++){
-			kappa[i][j][k] = alpha[i][j]*states[j].next[k]*states[k].prob[input[i+1]]*beta[i+1][k]/sum;
+			kappa[i][j][k] = alpha[i][j]*states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k]/sum;
 		}
 	}
 
@@ -118,7 +115,7 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 		}
 		sum += gamma[S-1][i];
 		for(j=0;j<O;j++){
-			for(k=b[i][j]=0;k<S;k++) if(input[k]==j) b[i][j] += gamma[k][i];
+			for(k=b[i][j]=0;k<S;k++) if(outputs[k]==j) b[i][j] += gamma[k][i];
 			b[i][j] /= sum;
 			
 			del = b[i][j]-states[i].prob[j];
