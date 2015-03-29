@@ -3,21 +3,19 @@ var ARR = (typeof Float64Array) == 'function' ? Float64Array : Array;
 
 var HMM = function(n, o){
 	this.N = n; this.O = o;
-	this.states = new Array(n);
-	this.init_prob = new ARR(n);
+
+	this.init_probs = new ARR(n);
+	this.next_probs = new ARR(n*n);
+	this.out_probs = new ARR(n*o);
 
 	var obj, i, j;
-	for(i=0; i<n; i++){
-		obj = {
-			'next': new ARR(n),
-			'prob': new ARR(o)
-		};
-		for(j=0; j<n; j++) obj.next[j] = 1/n;
-		for(j=0; j<o; j++) obj.prob[j] = 1/o;
-		this.states[i] = obj;
-		this.init_prob[i] = 1/n;
-	}
-	
+	for(i=0; i<n*n; i++) this.next_probs[i] = 1/n;
+	for(i=0; i<n*o; i++) this.out_probs[i] = 1/o;
+	for(i=0; i<n; i++) this.init_probs[i] = 1/n;
+
+	// for evaluate
+	this._alpha_1 = new ARR(n);
+	this._alpha_2 = new ARR(n);
 };
 
 HMM.prototype.randomize = function HMM$randomize(){
@@ -26,10 +24,10 @@ HMM.prototype.randomize = function HMM$randomize(){
 		i = 0|Math.random()*N;
 		j = 0|Math.random()*N;
 		if(i==j) continue;
-		if(this.init_prob[i] + this.init_prob[j] >= 1) continue;
-		x = Math.random()*this.init_prob[i];
-		this.init_prob[i] -= x;
-		this.init_prob[j] += x;
+		if(this.init_probs[i] + this.init_probs[j] >= 1) continue;
+		x = Math.random()*this.init_probs[i];
+		this.init_probs[i] -= x;
+		this.init_probs[j] += x;
 	}
 };
 
@@ -37,91 +35,106 @@ HMM.prototype.evaluate = function HMM$evaluate(outputs){
 	if(outputs.length == 0) return 1;
 	
 	var N = this.N,
-		states = this.states;
+		init_probs = this.init_probs,
+		next_probs = this.next_probs,
+		out_probs = this.out_probs;
 	
-	var prev_alpha = null,
-		next_alpha = Array.prototype.map.call(this.init_prob, function(v, i){return v*states[i].prob[outputs[0]];});
+	var alpha_1 = this._alpha_1,
+		alpha_2 = this._alpha_2;
 	
-	var t, sum, output;
+	var t, i, j, k, l, sum, output;
+	
+	for(i=0,j=outputs[0]*N; i<N; i++,j++) alpha_1[i] = init_probs[i] * out_probs[j];
+	
 	for(t=1; t<outputs.length; t++){
 		output = outputs[t];
-		prev_alpha = next_alpha;
-		next_alpha = states.map(function(state, j){
-			for(var v=0, i=0; i<N; i++) v += prev_alpha[i] * states[i].next[j];
-			return v * state.prob[output];
-		});
+		for(j=0,k=output*N; j<N; j++,k++){
+			for(sum=i=0,l=j; i<N; i++, l+=N) sum += alpha_1[i] * next_probs[l];
+			alpha_2[j] = sum * out_probs[k];
+		}
+		if(++t >= outputs.length) break;
+
+		output = outputs[t];
+		for(j=0,k=output*N; j<N; j++,k++){
+			for(sum=i=0,l=j; i<N; i++, l+=N) sum += alpha_2[i] * next_probs[l];
+			alpha_1[j] = sum * out_probs[k];
+		}
 	}
-	for(sum=t=0; t<N; t++) sum += next_alpha[t];
+
+	if(t&1) for(sum=i=0; i<N; i++) sum += alpha_1[i];
+	else for(sum=i=0; i<N; i++) sum += alpha_2[i];
 	return sum;
 };
 
 HMM.prototype.train = function HMM$train(outputs, rate){
 	if(rate == null) rate = .05;
 	
-	var alpha=[], beta=[];
-	var gamma=[], kappa=[];
 	var i,j,k,l,sum;
-	var states = this.states, init = this.init_prob;
+	var init = this.init_probs,
+		next_probs = this.next_probs,
+		out_probs = this.out_probs;
 	var N = this.N, O = this.O, S = outputs.length;
 	
+	var alpha=[], beta=[];
+	var gamma=[], kappa=[];
+	
 	// Expectation - step 1 (computing alpha and beta)
-	for(i=0;i<outputs.length;i++){
-		alpha[i] = []; beta[i] = [];
-		gamma[i] = []; if(i<S-1) kappa[i] = [];
-		for(j=0;j<N;j++){
-			if(i==0){
-				alpha[0][j] = init[j]*states[j].prob[outputs[0]];
-			}else{
-				for(k=sum=0;k<N;k++) sum += alpha[i-1][k]*states[k].next[j];
-				alpha[i][j] = sum*states[j].prob[outputs[i]];
-			}
+	for(i=0; i<S; i++){
+		alpha[i] = new Array(N);
+		beta[i] = new Array(N);
+		gamma[i] = new Array(N);
+		if(i<S-1) kappa[i] = new Array(N);
+		if(i==0) for(j=0; j<N; j++) alpha[0][j] = init[j]*out_probs[j+outputs[0]*N];
+		else for(j=0; j<N; j++){
+			for(k=sum=0;k<N;k++) sum += alpha[i-1][k]*next_probs[k*N+j];
+			alpha[i][j] = sum*out_probs[j+outputs[i]*N];
 		}
 	}
-	for(i=S;i-->0;){
-		for(j=0;j<N;j++){
+	for(i=S; i-->0; ){
+		for(j=0; j<N; j++){
 			if(i==S-1){
 				beta[i][j] = 1;
 			}else{
 				beta[i][j] = 0;
-				for(k=0;k<N;k++)
-					beta[i][j] += states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k];
+				for(k=0; k<N; k++)
+					beta[i][j] += next_probs[j*N+k]*out_probs[k+outputs[i+1]*N]*beta[i+1][k];
 			}
 		}
 	}
 	// Expectation - step 2 (computing gamma and kappa)
-	for(i=0;i<S;i++){
-		for(k=sum=0;k<N;k++) sum += alpha[i][k]*beta[i][k];
-		for(j=0;j<N;j++){
+	for(i=0; i<S; i++){
+		for(k=sum=0; k<N; k++) sum += alpha[i][k]*beta[i][k];
+		for(j=0; j<N; j++){
 			gamma[i][j] = alpha[i][j]*beta[i][j]/sum;
 		}
 		if(i==S-1) break;
-		for(j=sum=0;j<N;j++) for(k=0;k<N;k++){
-			sum += alpha[i][j]*states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k];
+		for(j=sum=0; j<N; j++) for(k=0; k<N; k++){
+			sum += alpha[i][j]*next_probs[j*N+k]*out_probs[k+outputs[i+1]*N]*beta[i+1][k];
 		}
-		for(j=0;j<N;j++) for(kappa[i][j]=[],k=0;k<N;k++){
-			kappa[i][j][k] = alpha[i][j]*states[j].next[k]*states[k].prob[outputs[i+1]]*beta[i+1][k]/sum;
+		for(j=0; j<N; j++) for(kappa[i][j]=[],k=0; k<N; k++){
+			kappa[i][j][k] = alpha[i][j]*next_probs[j*N+k]*out_probs[k+outputs[i+1]*N]*beta[i+1][k]/sum;
 		}
 	}
 
 	// Maximum likelihood
 	var a=[], b=[], p=[], del;
-	for(i=0;i<N;i++){
+	for(i=0; i<N; i++){
 		a[i]=[]; b[i]=[];
-		for(k=sum=0;k<S-1;k++) sum += gamma[k][i];
-		for(j=0;j<N;j++){
+		for(k=sum=0; k<S-1; k++) sum += gamma[k][i];
+		for(j=0; j<N; j++){
 			for(k=a[i][j]=0;k<S-1;k++) a[i][j] += kappa[k][i][j];
 			a[i][j] /= sum;
 			
-			del = a[i][j]-states[i].next[j];
-			states[i].next[j] += del*rate;
+			del = a[i][j]-next_probs[i*N+j];
+			next_probs[i*N+j] += del*rate;
 		}
 		sum += gamma[S-1][i];
-		for(j=0;j<O;j++){
-			for(k=b[i][j]=0;k<S;k++) if(outputs[k]==j) b[i][j] += gamma[k][i];
+		for(j=0; j<O; j++){
+			for(k=b[i][j]=0; k<S; k++) if(outputs[k]==j) b[i][j] += gamma[k][i];
 			b[i][j] /= sum;
 			
-			del = b[i][j]-states[i].prob[j];
-			states[i].prob[j] += del*rate;
+			del = b[i][j]-out_probs[i+j*N];
+			out_probs[i+j*N] += del*rate;
 		}
 		p[i] = gamma[0][i];
 
@@ -135,17 +148,11 @@ HMM.prototype.toString = function HMM$toString(){
 		'[',
 		this.N, ',', this.O,
 		',[',
-		this.states.map(function(o){
-			return [
-				'[[',
-				Array.prototype.join.call(o.next),
-				'],[',
-				Array.prototype.join.call(o.prob),
-				']]'
-			].join('');
-		}).join(','),
+		Array.prototype.join.call(this.next_probs),
 		'],[',
-		Array.prototype.join.call(this.init_prob),
+		Array.prototype.join.call(this.out_probs),
+		'],[',
+		Array.prototype.join.call(this.init_probs),
 		']]'
 	].join('');
 };
@@ -153,12 +160,9 @@ HMM.prototype.toString = function HMM$toString(){
 HMM.parse = function HMM_parse(str){
 	var json = JSON.parse(str);
 	var hmm = new HMM(json[0], json[1]);
-	hmm.states = json[2].map(function(o){
-		return {
-			'next': ARR.call(null, o[0]), 'prob': ARR.call(null, o[1])
-		};
-	});
-	hmm.init_prob = ARR.call(null, json[3]);
+	hmm.next_probs = ARR.call(null, json[2]);
+	hmm.out_probs = ARR.call(null, json[3]);
+	hmm.init_probs = ARR.call(null, json[4]);
 
 	return hmm;
 };

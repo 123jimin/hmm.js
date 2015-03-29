@@ -6,7 +6,7 @@ var hmms = require("./files");
 describe('HMM', function(){
 	describe('train', function(){
 		it("should improve results", function(){
-			this.timeout(200);
+			this.timeout(100);
 			var i, j, test;
 			for(i=0; i<20; i++){
 				test = new HMM(6, 10);
