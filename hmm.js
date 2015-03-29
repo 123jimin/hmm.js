@@ -78,64 +78,64 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 	var n_next_probs = this._n_next_probs;
 	
 	var N = this.N, O = this.O, S = outputs.length;
-	
-	var alpha=[], beta=[];
-	var gamma=[], kappa=[];
+	var outputs_N = outputs.map(function(v){return v*N;});
+
+	var alpha = new Array(N*S),
+		beta = new Array(N*S),
+		gamma = new Array(N*S),
+		kappa = [];
 	
 	// Expectation - step 1 (computing alpha and beta)
 	for(i=0; i<S; i++){
-		alpha[i] = new Array(N);
-		beta[i] = new Array(N);
-		gamma[i] = new Array(N);
 		if(i<S-1) kappa[i] = new Array(N*N);
-		if(i==0) for(j=0; j<N; j++) alpha[0][j] = init[j]*out_probs[j+outputs[0]*N];
+		if(i==0) for(j=0; j<N; j++) alpha[j] = init[j]*out_probs[j+outputs_N[0]];
 		else for(j=0; j<N; j++){
-			for(k=sum=0;k<N;k++) sum += alpha[i-1][k]*next_probs[k*N+j];
-			alpha[i][j] = sum*out_probs[j+outputs[i]*N];
+			for(k=sum=0;k<N;k++) sum += alpha[(i-1)*N+k]*next_probs[k*N+j];
+			alpha[i*N+j] = sum*out_probs[j+outputs_N[i]];
 		}
 	}
 	for(i=S; i-->0; ){
-		for(j=0; j<N; j++){
+		for(j=0,l=i*N; j<N; j++, l++){
 			if(i==S-1){
-				beta[i][j] = 1;
+				beta[l] = 1;
 			}else{
-				beta[i][j] = 0;
+				beta[l] = 0;
 				for(k=0; k<N; k++)
-					beta[i][j] += next_probs[j*N+k]*out_probs[k+outputs[i+1]*N]*beta[i+1][k];
+					beta[l] += next_probs[j*N+k]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k];
 			}
 		}
 	}
 	// Expectation - step 2 (computing gamma and kappa)
 	for(i=0; i<S; i++){
-		for(k=sum=0; k<N; k++) sum += alpha[i][k]*beta[i][k];
+		for(k=sum=0; k<N; k++) sum += alpha[i*N+k]*beta[i*N+k];
 		for(j=0; j<N; j++){
-			gamma[i][j] = alpha[i][j]*beta[i][j]/sum;
+			gamma[i*N+j] = alpha[i*N+j]*beta[i*N+j]/sum;
 		}
 		if(i==S-1) break;
 		for(j=sum=0; j<N; j++) for(k=0; k<N; k++){
-			sum += alpha[i][j]*next_probs[j*N+k]*out_probs[k+outputs[i+1]*N]*beta[i+1][k];
+			sum += alpha[i*N+j]*next_probs[j*N+k]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k];
 		}
 		for(l=j=0; j<N; j++) for(k=0; k<N; k++,l++){
-			kappa[i][l] = alpha[i][j]*next_probs[l]*out_probs[k+outputs[i+1]*N]*beta[i+1][k]/sum;
+			kappa[i][l] = alpha[i*N+j]*next_probs[l]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k]/sum;
 		}
 	}
 
 	// Maximum likelihood
 	var x, p=[], del;
 	for(l=i=0; i<N; i++){
-		for(k=sum=0; k<S-1; k++) sum += gamma[k][i];
+		for(k=sum=0; k<S-1; k++) sum += gamma[k*N+i];
 		for(j=0; j<N; j++,l++){
 			for(k=x=0;k<S-1;k++) x += kappa[k][l];
 			del = x/sum-next_probs[l];
 			next_probs[l] += del*rate;
 		}
-		sum += gamma[S-1][i];
+		sum += gamma[(S-1)*N+i];
 		for(j=0; j<O; j++){
-			for(k=x=0; k<S; k++) if(outputs[k]==j) x += gamma[k][i];
+			for(k=x=0; k<S; k++) if(outputs[k]==j) x += gamma[k*N+i];
 			del = x/sum-out_probs[i+j*N];
 			out_probs[i+j*N] += del*rate;
 		}
-		del = gamma[0][i]-init[i];
+		del = gamma[i]-init[i];
 		init[i] += del*rate;
 	}
 };
