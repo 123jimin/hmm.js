@@ -111,11 +111,10 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 	var alpha = new Array(N*S),
 		beta = new Array(N*S),
 		gamma = new Array(N*S),
-		kappa = [];
+		kappa = new Array(N*N*(S-1));
 	
 	// Expectation - step 1 (computing alpha and beta)
 	for(i=0; i<S; i++){
-		if(i<S-1) kappa[i] = new Array(N*N);
 		if(i==0) for(j=0; j<N; j++) alpha[j] = init[j]*out_probs[j+outputs_N[0]];
 		else for(j=0; j<N; j++){
 			for(k=sum=0;k<N;k++) sum += alpha[(i-1)*N+k]*next_probs[k*N+j];
@@ -145,7 +144,7 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 			sum += alpha[i*N+j]*next_probs[j*N+k]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k];
 		}
 		for(l=j=0; j<N; j++) for(k=0; k<N; k++,l++){
-			kappa[i][l] = alpha[i*N+j]*next_probs[l]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k]/sum;
+			kappa[i*N*N+l] = alpha[i*N+j]*next_probs[l]*out_probs[k+outputs_N[i+1]]*beta[(i+1)*N+k]/sum;
 		}
 	}
 
@@ -154,7 +153,7 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 	for(l=i=0; i<N; i++){
 		for(k=sum=0; k<S-1; k++) sum += gamma[k*N+i];
 		for(j=0; j<N; j++,l++){
-			for(k=x=0;k<S-1;k++) x += kappa[k][l];
+			for(k=x=0;k<S-1;k++) x += kappa[k*N*N+l];
 			del = x/sum-next_probs[l];
 			next_probs[l] += del*rate;
 		}
