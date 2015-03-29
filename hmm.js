@@ -1,21 +1,30 @@
 var HMM = (function(){
 var ARR = (typeof Float64Array) == 'function' ? Float64Array : Array;
 
-var HMM = function(n, o){
-	this.N = n; this.O = o;
+var _choose = function _choose(a, ao, as, al){
+	var i, x = Math.random();
+	for(i=0; i<al; i++){
+		x -= a[ao+i*as];
+		if(x < 0) return i;
+	}
+	return al-1;
+};
 
-	this.init_probs = new ARR(n);
-	this.next_probs = new ARR(n*n);
-	this.out_probs = new ARR(n*o);
+var HMM = function(N, O){
+	this.N = N; this.O = O;
+
+	this.init_probs = new ARR(N);
+	this.next_probs = new ARR(N*N); // curr*N + next
+	this.out_probs = new ARR(N*O); // out*N + curr
 
 	var obj, i, j;
-	for(i=0; i<n*n; i++) this.next_probs[i] = 1/n;
-	for(i=0; i<n*o; i++) this.out_probs[i] = 1/o;
-	for(i=0; i<n; i++) this.init_probs[i] = 1/n;
+	for(i=0; i<N*N; i++) this.next_probs[i] = 1/N;
+	for(i=0; i<N*O; i++) this.out_probs[i] = 1/O;
+	for(i=0; i<N; i++) this.init_probs[i] = 1/N;
 
 	// for evaluating
-	this._alpha_1 = new ARR(n);
-	this._alpha_2 = new ARR(n);
+	this._alpha_1 = new ARR(N);
+	this._alpha_2 = new ARR(N);
 };
 
 HMM.prototype.randomize = function HMM$randomize(){
@@ -28,6 +37,25 @@ HMM.prototype.randomize = function HMM$randomize(){
 		x = Math.random()*this.init_probs[i];
 		this.init_probs[i] -= x;
 		this.init_probs[j] += x;
+	}
+};
+
+HMM.prototype.simulate = function HMM$simulate(in_state){
+	var N = this.N, O = this.O;
+	if(in_state == null) in_state = -1;
+	var next_state = in_state == -1 ? _choose(this.init_probs, 0, 1, N) : _choose(this.next_probs, in_state*N, 1, N);
+	var next_output = _choose(this.out_probs, next_state, N, O);
+	return [next_state, next_output];
+};
+
+HMM.prototype.generate = function HMM$generate(process){
+	var curr_state = -1,
+		result_str = [];
+	for(var i=0;;i++){
+		var v = this.simulate(curr_state);
+		curr_state = v[0];
+		result_str.push(v[1]);
+		if(!process(v[1], i)) return result_str;
 	}
 };
 
