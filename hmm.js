@@ -105,6 +105,7 @@ HMM.prototype.train = function HMM$train(outputs, rate){
 			}
 		}
 	}
+
 	// Expectation - step 2 (computing gamma and kappa)
 	for(i=0; i<S; i++){
 		for(k=sum=0; k<N; k++) sum += alpha[i*N+k]*beta[i*N+k];
